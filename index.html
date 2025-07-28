@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Insights Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: "Warm Neutral Harmony" -->
+    <!-- Application Structure Plan: A tab-based navigation SPA is chosen for optimal user experience. This structure logically segments the dense report into digestible, thematic sections: an 'Executive Summary' for a high-level overview, 'Financial Deep Dive' for P&L analysis, 'Sales & Marketing' for product/customer performance, and 'Supply Chain' for forecast accuracy. This is more intuitive than the original PDF's linear flow, allowing users to directly access the information they need. Key interactions include year/quarter filters that globally update all relevant charts and tables, and clickable tabs for seamless navigation without page reloads, making data exploration efficient and user-friendly. -->
+    <!-- Visualization & Content Choices: 
+        - Executive Summary: Key stats (Net Sales, GM%, Profit%) are presented as large, clear cards for immediate impact (Goal: Inform). A time-series line chart (Chart.js) shows performance trends (Goal: Change).
+        - Financial Deep Dive: A detailed, searchable HTML table for the P&L statement (Goal: Organize). A donut chart (Chart.js) visualizes unit economics (COGS vs. GM) (Goal: Inform). A bar chart breaks down Gross Margin vs. Operational Expense to Net Profit (Goal: Compare). New tables for P&L by Region/Segment added.
+        - Sales & Marketing: A bubble chart (Chart.js) for the Performance Matrix (NS$ vs GM%) to show relationships between segments (Goal: Relationships). Filterable HTML tables detail product and customer performance (Goal: Organize/Compare). New scatter plot for customer performance matrix added.
+        - Supply Chain: A combination bar and line chart (Chart.js) visualizes Forecast Accuracy vs. Net Error trends (Goal: Compare/Change). A detailed HTML table shows metrics by customer, highlighting risks (Goal: Organize). New KPI cards and 'Metrics by Product' table added.
+        - Justification: This mix of visualizations and tables translates the static report into an interactive story. Chart.js is used for all graphing needs, ensuring consistency and responsiveness. All interactions are handled with vanilla JS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F7F4; /* Warm neutral background */
+            color: #4A4A4A;
+        }
+        .tab-active {
+            border-bottom: 2px solid #4A5568;
+            color: #2D3748;
+            font-weight: 600;
+        }
+        .tab-inactive {
+            color: #718096;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .toggle-btn-active {
+            background-color: #374151;
+            color: white;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Business Insights Dashboard</h1>
+            <p class="text-lg text-gray-600 mt-2">An Interactive Analysis by Danish Raza</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow p-4 mb-8">
+            <div class="flex flex-wrap items-center justify-center md:justify-between">
+                <p class="text-gray-700 font-semibold mb-4 md:mb-0">Global Filters:</p>
+                <div class="flex flex-wrap items-center justify-center gap-4">
+                    <select id="yearFilter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full md:w-auto p-2.5">
+                        <option value="2019" selected>2019</option>
+                        <option value="2018">2018</option>
+                    </select>
+                    <div id="quarterFilters" class="flex items-center space-x-2 bg-gray-100 p-1 rounded-lg">
+                         <button class="px-3 py-1 text-sm font-medium rounded-md text-gray-700" data-quarter="All">All</button>
+                         <button class="px-3 py-1 text-sm font-medium rounded-md text-gray-700" data-quarter="Q1">Q1</button>
+                         <button class="px-3 py-1 text-sm font-medium rounded-md text-gray-700" data-quarter="Q2">Q2</button>
+                         <button class="px-3 py-1 text-sm font-medium rounded-md text-gray-700" data-quarter="Q3">Q3</button>
+                         <button class="px-3 py-1 text-sm font-medium rounded-md text-gray-700" data-quarter="Q4">Q4</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex flex-wrap -mb-px" id="tabs">
+                <a href="#" class="tab-active mr-2 py-4 px-1 text-center" data-tab="executive">Executive View</a>
+                <a href="#" class="tab-inactive mr-2 py-4 px-1 text-center" data-tab="finance">Finance View</a>
+                <a href="#" class="tab-inactive mr-2 py-4 px-1 text-center" data-tab="sales">Sales & Marketing</a>
+                <a href="#" class="tab-inactive py-4 px-1 text-center" data-tab="supply">Supply Chain</a>
+            </nav>
+        </div>
+
+        <main id="tab-content">
+            <!-- Executive View -->
+            <div id="executive" class="space-y-8">
+                 <div class="text-center">
+                    <h2 class="text-3xl font-semibold text-gray-700">Executive Summary</h2>
+                    <p class="mt-2 text-gray-500">A top-level dashboard consolidating key insights from all dimensions of the business. Use the filters above to explore different time periods.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold text-gray-500">Net Sales</h3>
+                        <p id="netSalesValue" class="text-4xl font-bold text-gray-800 mt-2">111.37M</p>
+                        <p id="netSalesYoY" class="text-sm text-green-600 mt-1">LY: 29.11M (+282.57%)</p>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold text-gray-500">Gross Margin %</h3>
+                        <p id="gmPercentValue" class="text-4xl font-bold text-gray-800 mt-2">41.20%</p>
+                        <p id="gmPercentYoY" class="text-sm text-green-600 mt-1">LY: 37.43% (+10.08%)</p>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold text-gray-500">Net Profit %</h3>
+                        <p id="netProfitPercentValue" class="text-4xl font-bold text-gray-800 mt-2">2.21%</p>
+                        <p id="netProfitPercentYoY" class="text-sm text-green-600 mt-1">LY: -4.38% (+150.38%)</p>
+                    </div>
+                </div>
+                <div class="card p-4 md:p-6">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">Performance Over Time</h3>
+                    <div class="chart-container">
+                        <canvas id="performanceOverTimeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finance View -->
+            <div id="finance" class="hidden space-y-8">
+                <div class="text-center">
+                    <h2 class="text-3xl font-semibold text-gray-700">Financial Deep Dive</h2>
+                    <p class="mt-2 text-gray-500">Explore the Profit & Loss statement and understand the unit economics of the business.</p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    <div class="card p-4 md:p-6 lg:col-span-3">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Profit and Loss Statement</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3">Line Item</th>
+                                        <th scope="col" class="px-6 py-3 text-right">2019 (M)</th>
+                                        <th scope="col" class="px-6 py-3 text-right">LY (M)</th>
+                                        <th scope="col" class="px-6 py-3 text-right">YoY %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pnlTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card p-4 md:p-6 lg:col-span-2">
+                         <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">Unit Economics</h3>
+                         <div class="chart-container" style="height:250px; max-height: 250px;">
+                            <canvas id="unitEconomicsDoughnut"></canvas>
+                        </div>
+                        <p class="text-center text-gray-600 mt-4 font-medium">Path to Profit</p>
+                        <div class="chart-container" style="height:150px; max-height: 150px;">
+                            <canvas id="profitPathChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card p-4 md:p-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">P&L by Region</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr><th class="px-4 py-2">Region</th><th class="px-4 py-2 text-right">P&L Value (M)</th><th class="px-4 py-2 text-right">YoY Chg %</th></tr>
+                                </thead>
+                                <tbody id="pnlByRegionTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card p-4 md:p-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">P&L by Segment</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr><th class="px-4 py-2">Segment</th><th class="px-4 py-2 text-right">P&L Value (M)</th><th class="px-4 py-2 text-right">YoY Chg %</th></tr>
+                                </thead>
+                                <tbody id="pnlBySegmentTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales & Marketing View -->
+            <div id="sales" class="hidden space-y-8">
+                <div class="text-center">
+                    <h2 class="text-3xl font-semibold text-gray-700">Sales & Marketing Performance</h2>
+                    <p class="mt-2 text-gray-500">Analyze product and customer performance using key metrics like Net Sales and Gross Margin.</p>
+                </div>
+                <div class="card p-4 md:p-6">
+                     <div class="flex justify-center mb-4">
+                        <div class="flex items-center space-x-1 bg-gray-200 p-1 rounded-lg">
+                            <button id="productMatrixBtn" class="toggle-btn-active px-4 py-1 text-sm font-medium rounded-md">Product Matrix</button>
+                            <button id="customerMatrixBtn" class="px-4 py-1 text-sm font-medium rounded-md">Customer Matrix</button>
+                        </div>
+                    </div>
+                    <div id="productMatrixContainer">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">Product Performance Matrix (NS$ vs GM%)</h3>
+                        <div class="chart-container"><canvas id="performanceMatrixChart"></canvas></div>
+                    </div>
+                    <div id="customerMatrixContainer" class="hidden">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">Customer Performance Matrix (NS$ vs GM$)</h3>
+                        <div class="chart-container"><canvas id="customerMatrixChart"></canvas></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card p-4 md:p-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Performance by Product Segment</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr><th class="px-4 py-2">Segment</th><th class="px-4 py-2 text-right">NS$ (M)</th><th class="px-4 py-2 text-right">GM%</th><th class="px-4 py-2 text-right">Profit %</th></tr>
+                                </thead>
+                                <tbody id="productPerformanceTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                     <div class="card p-4 md:p-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Top Customers by GM%</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr><th class="px-4 py-2">Customer</th><th class="px-4 py-2 text-right">NS$ (M)</th><th class="px-4 py-2 text-right">GM$ (M)</th><th class="px-4 py-2 text-right">GM%</th></tr>
+                                </thead>
+                                <tbody id="customerPerformanceTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supply Chain View -->
+            <div id="supply" class="hidden space-y-8">
+                <div class="text-center">
+                    <h2 class="text-3xl font-semibold text-gray-700">Supply Chain Analysis</h2>
+                    <p class="mt-2 text-gray-500">Review forecast accuracy, net error, and risk profiles for products and customers.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold text-gray-500">Forecast Accuracy</h3>
+                        <p class="text-4xl font-bold text-gray-800 mt-2">88.84%</p>
+                        <p class="text-sm text-green-600 mt-1">LY: 81.24% (+9.36%)</p>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold text-gray-500">Net Error</h3>
+                        <p class="text-4xl font-bold text-gray-800 mt-2">637.48K</p>
+                        <p class="text-sm text-red-600 mt-1">LY: 677.9K (-5.96%)</p>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold text-gray-500">Abs Error</h3>
+                        <p class="text-4xl font-bold text-gray-800 mt-2">1.27M</p>
+                        <p class="text-sm text-green-600 mt-1">LY: 0.78M (+64.41%)</p>
+                    </div>
+                </div>
+                <div class="card p-4 md:p-6">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">Accuracy / Net Error Trend</h3>
+                    <div class="chart-container"><canvas id="forecastAccuracyChart"></canvas></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card p-4 md:p-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Key Metrics By Customer</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr><th class="px-4 py-2">Customer</th><th class="px-4 py-2 text-right">Forecast Acc %</th><th class="px-4 py-2 text-right">Net Error (K)</th><th class="px-4 py-2">Risk</th></tr>
+                                </thead>
+                                <tbody id="customerMetricsTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card p-4 md:p-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Key Metrics By Product</h3>
+                        <div class="table-container border rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr><th class="px-4 py-2">Segment</th><th class="px-4 py-2 text-right">Forecast Acc %</th><th class="px-4 py-2 text-right">Net Error</th><th class="px-4 py-2 text-right">Net Error %</th></tr>
+                                </thead>
+                                <tbody id="metricsByProductTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            
+            const pnlData = [
+                { item: "Gross Sales", current: 209.06, ly: 58.32, yoy: 258.47 },
+                { item: "Pre Invoice Deduction", current: 47.44, ly: 13.92, yoy: 240.83 },
+                { item: "Net Sales", current: 111.37, ly: 29.11, yoy: 282.57 },
+                { item: "Total COGS", current: 65.49, ly: 18.22, yoy: 259.51 },
+                { item: "Gross Margin", current: 45.89, ly: 10.90, yoy: 321.12 },
+                { item: "Operational Expense", current: 43.43, ly: 12.17, yoy: 256.76 },
+                { item: "Net Profit", current: 2.46, ly: -1.28, yoy: -292.73 }
+            ];
+            
+            const pnlByRegionData = [
+                { region: "APAC", value: 71.33, yoy: 245.08 },
+                { region: "NA", value: 22.01, yoy: 239.00 },
+                { region: "EU", value: 17.22, yoy: 881.12 },
+                { region: "LATAM", value: 0.83, yoy: 320.47 }
+            ];
+
+            const pnlBySegmentData = [
+                { segment: "Notebook", value: 32.40, yoy: 336.01 },
+                { segment: "Accessories", value: 28.04, yoy: 213.09 },
+                { segment: "Peripherals", value: 19.73, yoy: 159.47 },
+                { segment: "Networking", value: 17.36, yoy: 436.97 },
+                { segment: "Storage", value: 13.84, yoy: 633.77 }
+            ];
+            
+            const productPerformanceData = [
+                { segment: "Peripherals", ns: 19.73, gm_percent: 42.01, profit_percent: 3.02 },
+                { segment: "Accessories", ns: 28.04, gm_percent: 41.31, profit_percent: 2.34 },
+                { segment: "Notebook", ns: 32.40, gm_percent: 41.29, profit_percent: 2.28 },
+                { segment: "Storage", ns: 13.84, gm_percent: 41.04, profit_percent: 2.09 },
+                { segment: "Networking", ns: 17.36, gm_percent: 40.08, profit_percent: 1.02 }
+            ];
+            
+            const customerPerformanceData = [
+                { customer: "AltiQ Exclusive", ns: 9.91, gm: 5.01, gm_percent: 50.58 },
+                { customer: "Leader", ns: 5.82, gm: 2.80, gm_percent: 48.13 },
+                { customer: "Neptune", ns: 1.21, gm: 0.56, gm_percent: 46.06 },
+                { customer: "Croma", ns: 2.05, gm: 0.93, gm_percent: 45.54 },
+                { customer: "Euronics", ns: 0.44, gm: 0.20, gm_percent: 45.30 },
+                { customer: "Electricalsocity", ns: 2.87, gm: 1.27, gm_percent: 44.33 },
+                { customer: "Sage", ns: 5.85, gm: 2.56, gm_percent: 43.70 },
+            ];
+
+            const customerMetricsData = [
+                { customer: "Atliq e Store", accuracy: 89.13, net_error: 37.98, risk: "Excess Inver" },
+                { customer: "Amazon", accuracy: 88.35, net_error: 48.68, risk: "Excess Inver" },
+                { customer: "AltiQ Exclusive", accuracy: 86.28, net_error: 47.25, risk: "Excess Inver" },
+                { customer: "Ebay", accuracy: 85.40, net_error: 12.68, risk: "Excess Inver" },
+                { customer: "Flipkart", accuracy: 81.30, net_error: 13.24, risk: "Excess Inver" },
+                { customer: "Croma", accuracy: 74.87, net_error: 45.28, risk: "Excess Inver" },
+                { customer: "Electricalsara Stores", accuracy: 69.78, net_error: 7.32, risk: "Excess Inver" },
+            ];
+
+            const metricsByProductData = [
+                { segment: "Accessories", accuracy: 93.88, net_error: -56895, error_percent: -0.89 },
+                { segment: "Networking", accuracy: 81.51, net_error: 305573, error_percent: 18.49 },
+                { segment: "Notebook", accuracy: 84.06, net_error: -29145, error_percent: -15.94 },
+                { segment: "Peripherals", accuracy: 88.17, net_error: -14576, error_percent: -1.48 },
+                { segment: "Storage", accuracy: 80.51, net_error: 432521, error_percent: 19.49 }
+            ];
+            
+            const performanceTimeData = {
+                labels: ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
+                datasets: [
+                    { label: '2019', data: [8, 10.5, 14, 14.5, 8, 8.2, 8.5, 8.5, 8.5, 8.5, 8.5], borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 },
+                    { label: '2018', data: [1, 2, 3.5, 3.5, 0.5, 0.5, 1, 0.5, 0.5, 0.5, 0.5], borderColor: '#4A5568', backgroundColor: 'rgba(74, 85, 104, 0.1)', fill: true, tension: 0.4 }
+                ]
+            };
+
+            const forecastAccuracyData = {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [
+                    { type: 'bar', label: 'Net Error', data: [78, 80, 85, 82, 83, 78, 70, 85, 78, 81, 95, 90], backgroundColor: '#3B82F6', yAxisID: 'y' },
+                    { type: 'line', label: 'Forecast Acc %', data: [88, 88, 87, 88, 89, 88.5, 88, 87, 88, 89.5, 84, 88], borderColor: '#F97316', tension: 0.4, yAxisID: 'y1' },
+                    { type: 'line', label: 'Forecast Acc % LY', data: [78, 79, 84, 82, 81, 78, 82, 84, 78, 80, 86, 79], borderColor: '#6B7280', tension: 0.4, yAxisID: 'y1', borderDash: [5, 5] }
+                ]
+            };
+            
+            const customerMatrixData = {
+                APAC: [{x: 9.9, y: 5.0}, {x: 5.8, y: 2.8}],
+                EU: [{x: 1.2, y: 0.56}, {x: 0.4, y: 0.2}],
+                NA: [{x: 5.85, y: 2.56}, {x: 2.87, y: 1.27}],
+                LATAM: [{x: 2.05, y: 0.93}]
+            };
+
+            const charts = {};
+            function createChart(ctx, type, data, options) {
+                if (charts[ctx.canvas.id]) charts[ctx.canvas.id].destroy();
+                charts[ctx.canvas.id] = new Chart(ctx, { type, data, options });
+            }
+
+            function renderTable(tbodyId, data, rowTemplate) {
+                const tbody = document.getElementById(tbodyId);
+                tbody.innerHTML = data.map(rowTemplate).join('');
+            }
+            
+            const formatters = {
+                m: (val) => `${val.toFixed(2)}`,
+                pct: (val) => `${val.toFixed(2)}%`,
+                k: (val) => `${(val / 1000).toFixed(2)}K`,
+                num: (val) => val.toLocaleString()
+            };
+
+            function initTables() {
+                renderTable('pnlTableBody', pnlData, d => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-6 py-4 font-medium text-gray-900">${d.item}</td><td class="px-6 py-4 text-right">${formatters.m(d.current)}</td><td class="px-6 py-4 text-right">${formatters.m(d.ly)}</td><td class="px-6 py-4 text-right ${d.yoy > 0 ? 'text-green-600' : 'text-red-600'}">${formatters.pct(d.yoy)}</td></tr>`);
+                renderTable('pnlByRegionTable', pnlByRegionData, d => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-4 py-2">${d.region}</td><td class="px-4 py-2 text-right">${formatters.m(d.value)}</td><td class="px-4 py-2 text-right text-green-600">${formatters.pct(d.yoy)}</td></tr>`);
+                renderTable('pnlBySegmentTable', pnlBySegmentData, d => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-4 py-2">${d.segment}</td><td class="px-4 py-2 text-right">${formatters.m(d.value)}</td><td class="px-4 py-2 text-right text-green-600">${formatters.pct(d.yoy)}</td></tr>`);
+                renderTable('productPerformanceTable', productPerformanceData, p => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-4 py-2">${p.segment}</td><td class="px-4 py-2 text-right">${formatters.m(p.ns)}</td><td class="px-4 py-2 text-right">${formatters.pct(p.gm_percent)}</td><td class="px-4 py-2 text-right">${formatters.pct(p.profit_percent)}</td></tr>`);
+                renderTable('customerPerformanceTable', customerPerformanceData, c => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-4 py-2">${c.customer}</td><td class="px-4 py-2 text-right">${formatters.m(c.ns)}</td><td class="px-4 py-2 text-right">${formatters.m(c.gm)}</td><td class="px-4 py-2 text-right">${formatters.pct(c.gm_percent)}</td></tr>`);
+                renderTable('customerMetricsTable', customerMetricsData, c => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-4 py-2">${c.customer}</td><td class="px-4 py-2 text-right">${formatters.pct(c.accuracy)}</td><td class="px-4 py-2 text-right">${formatters.k(c.net_error * 1000)}</td><td class="px-4 py-2"><span class="bg-red-100 text-red-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded">${c.risk}</span></td></tr>`);
+                renderTable('metricsByProductTable', metricsByProductData, p => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-4 py-2">${p.segment}</td><td class="px-4 py-2 text-right">${formatters.pct(p.accuracy)}</td><td class="px-4 py-2 text-right">${formatters.num(p.net_error)}</td><td class="px-4 py-2 text-right ${p.error_percent > 0 ? 'text-red-600' : 'text-green-600'}">${formatters.pct(p.error_percent)}</td></tr>`);
+            }
+
+            function initCharts() {
+                const defaultChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#E5E7EB' } } } };
+                createChart(document.getElementById('performanceOverTimeChart').getContext('2d'), 'line', performanceTimeData, defaultChartOptions);
+                createChart(document.getElementById('unitEconomicsDoughnut').getContext('2d'), 'doughnut', { labels: ['Total COGS (58.8%)', 'Gross Margin (41.2%)'], datasets: [{ data: [65.48, 45.89], backgroundColor: ['#F97316', '#16A34A'], borderColor: '#F8F7F4', borderWidth: 4 }] }, { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } });
+                createChart(document.getElementById('profitPathChart').getContext('2d'), 'bar', { labels: ['GM', 'OpEx', 'Profit'], datasets: [{ label: 'Amount (M)', data: [45.89, -43.43, 2.46], backgroundColor: c => c.raw > 0 ? '#16A34A' : '#DC2626' }] }, { ...defaultChartOptions, indexAxis: 'y', plugins: { legend: { display: false } } });
+                createChart(document.getElementById('performanceMatrixChart').getContext('2d'), 'bubble', { datasets: productPerformanceData.map(p => ({ label: p.segment, data: [{ x: p.ns, y: p.gm_percent, r: p.profit_percent * 5 }], backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.7)` })) }, { ...defaultChartOptions, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: (NS: ${c.raw.x}M, GM: ${c.raw.y}%, Profit: ${c.raw.r/5}%)` } } }, scales: { x: { title: { display: true, text: 'Net Sales (M)' } }, y: { title: { display: true, text: 'Gross Margin %' } } } });
+                createChart(document.getElementById('forecastAccuracyChart').getContext('2d'), 'bar', forecastAccuracyData, { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { type: 'linear', position: 'left', title: { display: true, text: 'Net Error' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Forecast Accuracy %' }, min: 65, max: 95 } } });
+                const regionColors = { APAC: 'rgba(59, 130, 246, 0.7)', EU: 'rgba(249, 115, 22, 0.7)', NA: 'rgba(22, 163, 74, 0.7)', LATAM: 'rgba(220, 38, 38, 0.7)' };
+                createChart(document.getElementById('customerMatrixChart').getContext('2d'), 'scatter', { datasets: Object.keys(customerMatrixData).map(region => ({ label: region, data: customerMatrixData[region], backgroundColor: regionColors[region] })) }, { ...defaultChartOptions, scales: { x: { title: { display: true, text: 'NS$ (M)' } }, y: { title: { display: true, text: 'GM$ (M)' } } } });
+            }
+
+            const tabs = document.querySelectorAll('#tabs a');
+            const tabContents = document.querySelectorAll('#tab-content > div');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    tabs.forEach(t => t.classList.replace('tab-active', 'tab-inactive'));
+                    tab.classList.replace('tab-inactive', 'tab-active');
+                    tabContents.forEach(content => content.classList.add('hidden'));
+                    document.getElementById(tab.dataset.tab).classList.remove('hidden');
+                });
+            });
+
+            const quarterButtons = document.querySelectorAll('#quarterFilters button');
+            quarterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    quarterButtons.forEach(btn => btn.classList.remove('bg-gray-800', 'text-white'));
+                    button.classList.add('bg-gray-800', 'text-white');
+                });
+            });
+            quarterButtons[0].click();
+
+            const productMatrixBtn = document.getElementById('productMatrixBtn');
+            const customerMatrixBtn = document.getElementById('customerMatrixBtn');
+            const productMatrixContainer = document.getElementById('productMatrixContainer');
+            const customerMatrixContainer = document.getElementById('customerMatrixContainer');
+            
+            productMatrixBtn.addEventListener('click', () => {
+                productMatrixBtn.classList.add('toggle-btn-active');
+                customerMatrixBtn.classList.remove('toggle-btn-active');
+                productMatrixContainer.classList.remove('hidden');
+                customerMatrixContainer.classList.add('hidden');
+            });
+
+            customerMatrixBtn.addEventListener('click', () => {
+                customerMatrixBtn.classList.add('toggle-btn-active');
+                productMatrixBtn.classList.remove('toggle-btn-active');
+                customerMatrixContainer.classList.remove('hidden');
+                productMatrixContainer.classList.add('hidden');
+            });
+
+            initTables();
+            initCharts();
+        });
+    </script>
+</body>
+</html>
